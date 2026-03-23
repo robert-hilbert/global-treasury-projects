@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FX Exposure Analysis — EUR/PLN Rate Discrepancy Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root {
+  --bg: #0a0f1a;
+  --bg-card: #111827;
+  --bg-card-hover: #1a2236;
+  --border: rgba(255,255,255,0.08);
+  --border-active: rgba(255,255,255,0.2);
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --accent-blue: #3b82f6;
+  --accent-blue-glow: rgba(59,130,246,0.15);
+  --accent-amber: #f59e0b;
+  --accent-amber-glow: rgba(245,158,11,0.12);
+  --accent-green: #10b981;
+  --accent-green-glow: rgba(16,185,129,0.12);
+  --accent-purple: #a78bfa;
+  --accent-purple-glow: rgba(167,139,250,0.12);
+  --accent-red: #f87171;
+  --accent-red-glow: rgba(248,113,113,0.15);
+  --font: 'DM Sans', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --radius: 12px;
+  --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+html{font-size:16px}
+body{
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+body::before{
+  content:'';position:fixed;inset:0;
+  background:radial-gradient(ellipse 80% 50% at 50% 0%, rgba(59,130,246,0.06) 0%, transparent 60%),
+             radial-gradient(ellipse 60% 40% at 80% 100%, rgba(167,139,250,0.04) 0%, transparent 50%);
+  pointer-events:none;z-index:0;
+}
+
+.container{
+  max-width:1400px;margin:0 auto;padding:32px 40px;position:relative;z-index:1;
+}
+
+/* Header */
+header{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  margin-bottom:40px;padding-bottom:28px;
+  border-bottom:1px solid var(--border);
+}
+.header-left h1{
+  font-size:1.75rem;font-weight:700;letter-spacing:-0.03em;
+  background:linear-gradient(135deg, #e2e8f0 0%, #94a3b8 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  margin-bottom:6px;
+}
+.header-left .subtitle{
+  font-size:0.875rem;color:var(--text-dim);font-weight:400;
+  display:flex;align-items:center;gap:8px;
+}
+.header-left .subtitle span{
+  display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:var(--accent-blue);animation:pulse-dot 2s ease-in-out infinite;
+}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:0.4}}
+.header-right{display:flex;gap:8px;align-items:center;margin-top:4px}
+.badge{
+  font-size:0.7rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;
+  padding:5px 10px;border-radius:6px;
+  background:rgba(59,130,246,0.12);color:var(--accent-blue);border:1px solid rgba(59,130,246,0.2);
+}
+.badge.amber{background:rgba(245,158,11,0.12);color:var(--accent-amber);border-color:rgba(245,158,11,0.2)}
+
+/* Legend */
+.legend{
+  display:flex;flex-wrap:wrap;gap:16px;margin-bottom:32px;
+  padding:16px 20px;border-radius:var(--radius);
+  background:rgba(255,255,255,0.02);border:1px solid var(--border);
+}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:0.78rem;color:var(--text-muted)}
+.legend-swatch{
+  width:12px;height:12px;border-radius:3px;flex-shrink:0;
+}
+.legend-line{width:20px;height:0;flex-shrink:0}
+
+/* Three-column layout */
+.columns{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:24px;
+  align-items:start;
+}
+@media(max-width:1100px){.columns{grid-template-columns:1fr;gap:32px}}
+
+/* Column containers */
+.column{
+  border-radius:var(--radius);
+  border:1px solid var(--border);
+  background:var(--bg-card);
+  overflow:hidden;
+  transition:border-color var(--transition);
+}
+.column:hover{border-color:var(--border-active)}
+.column-header{
+  padding:18px 20px 14px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;
+}
+.column-header .col-num{
+  font-family:var(--mono);font-size:0.7rem;font-weight:500;
+  width:24px;height:24px;display:flex;align-items:center;justify-content:center;
+  border-radius:6px;flex-shrink:0;
+}
+.column-header h2{font-size:0.9rem;font-weight:600;letter-spacing:-0.01em}
+.column-body{padding:20px}
+
+/* Node cards */
+.node{
+  padding:14px 16px;border-radius:10px;margin-bottom:12px;
+  border:1px solid var(--border);cursor:pointer;
+  transition:all var(--transition);position:relative;
+  background:rgba(255,255,255,0.015);
+}
+.node:hover{
+  background:var(--bg-card-hover);
+  border-color:var(--border-active);
+  transform:translateY(-1px);
+  box-shadow:0 4px 20px rgba(0,0,0,0.3);
+}
+.node.expanded{
+  border-color:var(--border-active);
+  background:var(--bg-card-hover);
+}
+.node-label{
+  font-size:0.7rem;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;
+  margin-bottom:6px;display:flex;align-items:center;gap:6px;
+}
+.node-label .dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.node-title{font-size:0.85rem;font-weight:500;line-height:1.45;color:var(--text)}
+.node-detail{
+  font-size:0.78rem;color:var(--text-muted);line-height:1.55;
+  margin-top:10px;padding-top:10px;border-top:1px solid var(--border);
+  max-height:0;overflow:hidden;opacity:0;
+  transition:max-height 0.35s ease, opacity 0.25s ease, margin-top 0.25s ease, padding-top 0.25s ease;
+}
+.node.expanded .node-detail{
+  max-height:300px;opacity:1;
+}
+.node-expand-hint{
+  font-size:0.65rem;color:var(--text-dim);margin-top:6px;
+  opacity:0;transition:opacity var(--transition);
+}
+.node:hover .node-expand-hint{opacity:1}
+.node.expanded .node-expand-hint{display:none}
+
+/* Decision diamond nodes */
+.node.decision{
+  border-style:solid;
+  border-width:1.5px;
+  background:rgba(245,158,11,0.04);
+}
+.node.decision .node-title{font-weight:600}
+
+/* Impact/alert nodes */
+.node.impact{
+  background:rgba(248,113,113,0.05);
+  border-color:rgba(248,113,113,0.2);
+}
+.node.impact:hover{border-color:rgba(248,113,113,0.4)}
+
+/* Next step nodes */
+.node.nextstep{
+  border-style:dashed;
+  border-color:rgba(167,139,250,0.3);
+  background:rgba(167,139,250,0.04);
+}
+.node.nextstep:hover{border-color:rgba(167,139,250,0.5)}
+
+/* Connector arrows */
+.connector{
+  display:flex;align-items:center;justify-content:center;
+  padding:4px 0;position:relative;
+}
+.connector svg{display:block}
+.connector-label{
+  font-size:0.65rem;font-weight:500;color:var(--text-dim);
+  background:var(--bg-card);padding:0 6px;
+  position:absolute;
+}
+.connector-cross{
+  text-align:center;padding:8px 0;
+}
+.connector-cross .cross-label{
+  font-size:0.65rem;color:var(--text-dim);font-style:italic;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.connector-cross .cross-label::before,
+.connector-cross .cross-label::after{
+  content:'';width:16px;height:1px;
+  background:linear-gradient(90deg,transparent,var(--text-dim),transparent);
+}
+
+/* Column specific colors */
+.col-blue .col-num{background:rgba(59,130,246,0.15);color:var(--accent-blue)}
+.col-blue .column-header h2{color:var(--accent-blue)}
+.col-blue .node-label{color:var(--accent-blue)}
+.col-blue .node-label .dot{background:var(--accent-blue)}
+
+.col-amber .col-num{background:rgba(245,158,11,0.15);color:var(--accent-amber)}
+.col-amber .column-header h2{color:var(--accent-amber)}
+.col-amber .node-label{color:var(--accent-amber)}
+.col-amber .node-label .dot{background:var(--accent-amber)}
+
+.col-green .col-num{background:rgba(16,185,129,0.15);color:var(--accent-green)}
+.col-green .column-header h2{color:var(--accent-green)}
+.col-green .node-label{color:var(--accent-green)}
+.col-green .node-label .dot{background:var(--accent-green)}
+
+.decision .node-label{color:var(--accent-amber)!important}
+.decision .node-label .dot{background:var(--accent-amber)!important}
+.impact .node-label{color:var(--accent-red)!important}
+.impact .node-label .dot{background:var(--accent-red)!important}
+.nextstep .node-label{color:var(--accent-purple)!important}
+.nextstep .node-label .dot{background:var(--accent-purple)!important}
+
+/* Summary bar */
+.summary-bar{
+  margin-top:32px;padding:20px 24px;
+  border-radius:var(--radius);
+  border:1px solid var(--border);
+  background:rgba(255,255,255,0.02);
+  display:flex;gap:32px;flex-wrap:wrap;
+}
+.summary-stat{display:flex;flex-direction:column;gap:2px}
+.summary-stat .stat-label{font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.06em;font-weight:500}
+.summary-stat .stat-value{font-size:0.9rem;font-weight:600;color:var(--text)}
+
+/* Print / presentation mode */
+@media print{
+  body{background:#fff;color:#1a1a2e}
+  .node{border-color:#ddd;background:#f8f9fa}
+  .column{border-color:#ddd;background:#fff}
+  .node-detail{max-height:300px!important;opacity:1!important}
+  .node-expand-hint{display:none!important}
+}
+
+/* Entrance animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.column{animation:fadeUp 0.5s ease both}
+.column:nth-child(1){animation-delay:0.1s}
+.column:nth-child(2){animation-delay:0.2s}
+.column:nth-child(3){animation-delay:0.3s}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="header-left">
+      <h1>FX Exposure Analysis — EUR/PLN Rate Discrepancy</h1>
+      <div class="subtitle"><span></span> Intercompany sale flow &middot; Entity 1420 → Poland LRD &middot; Zalando layer &middot; Accounting treatment</div>
+    </div>
+    <div class="header-right">
+      <div class="badge">Global Treasury</div>
+      <div class="badge amber">Working Draft</div>
+    </div>
+  </header>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-blue)"></div>Core process step</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-amber);border-radius:50%"></div>Decision point</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-red)"></div>FX exposure / margin impact</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-green)"></div>Accounting treatment</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:var(--accent-purple);border:1px dashed var(--accent-purple)"></div>Next step</div>
+    <div class="legend-item"><svg class="legend-line" viewBox="0 0 20 2"><line x1="0" y1="1" x2="20" y2="1" stroke="var(--text-dim)" stroke-width="1" stroke-dasharray="3 2"/></svg>Cross-column link</div>
+    <div class="legend-item" style="margin-left:auto;font-size:0.7rem;color:var(--text-dim)">Click any card to expand details</div>
+  </div>
+
+  <div class="columns">
+
+    <!-- COLUMN 1: Core FX Driver -->
+    <div class="column col-blue">
+      <div class="column-header">
+        <div class="col-num">01</div>
+        <h2>Core FX driver: rate discrepancy</h2>
+      </div>
+      <div class="column-body">
+
+        <div class="node" onclick="toggle(this)" data-id="a1">
+          <div class="node-label"><span class="dot"></span>IC Sale</div>
+          <div class="node-title">Entity 1420 (EUR) sells to Poland LRD (PLN)</div>
+          <div class="node-detail">Intercompany sale originates from EUR-functional entity 1420. The receiving entity in Poland operates in PLN. This cross-currency IC transaction is the root of the FX exposure chain.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div class="connector"><svg width="2" height="16"><line x1="1" y1="0" x2="1" y2="16" stroke="var(--text-dim)" stroke-width="1"/></svg></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="node" onclick="toggle(this)" data-id="a2">
+            <div class="node-label"><span class="dot"></span>Invoice pricing</div>
+            <div class="node-title">Set in PLN using <strong>plan rate</strong></div>
+            <div class="node-detail">The invoice to Poland is priced in PLN at the budgeted/plan FX rate established at the beginning of the fiscal year. This rate is static and does not move with market fluctuations.</div>
+            <div class="node-expand-hint">Click to expand →</div>
+          </div>
+          <div class="node" onclick="toggle(this)" data-id="a3">
+            <div class="node-label"><span class="dot"></span>1420 Accounting</div>
+            <div class="node-title">Converted to EUR using <strong>daily rate</strong></div>
+            <div class="node-detail">Entity 1420 records the sale in EUR using the prevailing daily spot rate (or monthly average). This rate fluctuates with the market, creating a variance against the plan rate used for pricing.</div>
+            <div class="node-expand-hint">Click to expand →</div>
+          </div>
+        </div>
+
+        <div class="connector"><svg width="2" height="16"><line x1="1" y1="0" x2="1" y2="16" stroke="var(--text-dim)" stroke-width="1"/></svg></div>
+
+        <div class="node decision" onclick="toggle(this)" data-id="a4">
+          <div class="node-label"><span class="dot"></span>Decision</div>
+          <div class="node-title">THE DELTA: Is there variance between plan rate and daily rate?</div>
+          <div class="node-detail">When the PLN plan rate used for invoicing diverges from the actual EUR/PLN daily rate used for 1420's books, a rate discrepancy emerges. The magnitude of this delta directly drives the FX exposure.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div class="connector">
+          <svg width="2" height="16"><line x1="1" y1="0" x2="1" y2="16" stroke="var(--text-dim)" stroke-width="1"/></svg>
+          <span class="connector-label" style="left:12px">Yes</span>
+        </div>
+
+        <div class="node impact" onclick="toggle(this)" data-id="a5">
+          <div class="node-label"><span class="dot"></span>Exposure created</div>
+          <div class="node-title">FX EXPOSURE CREATED</div>
+          <div class="node-detail">The delta between plan rate and daily rate creates a realized FX exposure on every intercompany transaction. Over a full period with thousands of IC invoices, this compounds into a material portfolio-level impact.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div class="connector"><svg width="2" height="16"><line x1="1" y1="0" x2="1" y2="16" stroke="var(--text-dim)" stroke-width="1"/></svg></div>
+
+        <div class="node" onclick="toggle(this)" data-id="a6">
+          <div class="node-label"><span class="dot"></span>Consolidation</div>
+          <div class="node-title">Intercompany sales eliminate on consolidation</div>
+          <div class="node-detail">During consolidation, the IC sale and corresponding IC purchase eliminate. However, the FX variance between the two sides of the elimination does not net to zero — it persists as a residual FX impact.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div class="connector"><svg width="2" height="16"><line x1="1" y1="0" x2="1" y2="16" stroke="var(--text-dim)" stroke-width="1"/></svg></div>
+
+        <div class="node impact" onclick="toggle(this)" data-id="a7">
+          <div class="node-label"><span class="dot"></span>Margin impact</div>
+          <div class="node-title">FX difference "leaks" through to consolidated margin</div>
+          <div class="node-detail">The FX variance that isn't eliminated leaks through to the consolidated P&L as a margin impact. This is the core mechanism by which the EUR/PLN rate discrepancy affects reported financial results.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div class="connector-cross"><div class="cross-label">feeds into columns 2 & 3</div></div>
+
+      </div>
+    </div>
+
+    <!-- COLUMN 2: Zalando Complexity -->
+    <div class="column col-amber">
+      <div class="column-header">
+        <div class="col-num">02</div>
+        <h2>Zalando complexity</h2>
+      </div>
+      <div class="column-body">
+
+        <div class="connector-cross"><div class="cross-label">triggered by IC sale (column 1)</div></div>
+
+        <div class="node" onclick="toggle(this)" data-id="b1" style="margin-top:12px">
+          <div class="node-label"><span class="dot"></span>Secondary exposure</div>
+          <div class="node-title">Rachel identifies additional Zalando layer</div>
+          <div class="node-detail">Beyond the direct IC sale exposure, Rachel has flagged a secondary exposure vector through the Zalando wholesale channel. This adds a layer of FX complexity that may either offset or amplify the core exposure.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div class="connector"><svg width="2" height="16"><line x1="1" y1="0" x2="1" y2="16" stroke="var(--text-dim)" stroke-width="1"/></svg></div>
+
+        <div class="node" onclick="toggle(this)" data-id="b2">
+          <div class="node-label"><span class="dot"></span>Workflow</div>
+          <div class="node-title">Poland invoices Zalando in PLN</div>
+          <div class="node-detail">The Poland entity issues invoices to Zalando denominated in PLN. This is the outgoing sale from the Polish subsidiary to the third-party wholesale partner.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div class="connector"><svg width="2" height="16"><line x1="1" y1="0" x2="1" y2="16" stroke="var(--text-dim)" stroke-width="1"/></svg></div>
+
+        <div class="node" onclick="toggle(this)" data-id="b3">
+          <div class="node-label"><span class="dot"></span>Settlement</div>
+          <div class="node-title">Zalando settles in EUR</div>
+          <div class="node-detail">Despite being invoiced in PLN, Zalando's settlement is in EUR. This creates a secondary FX conversion at settlement that may generate its own rate variance independent of the IC exposure.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div class="connector"><svg width="2" height="16"><line x1="1" y1="0" x2="1" y2="16" stroke="var(--text-dim)" stroke-width="1"/></svg></div>
+
+        <div class="node decision" onclick="toggle(this)" data-id="b4">
+          <div class="node-label"><span class="dot"></span>Key question</div>
+          <div class="node-title">Natural offset or unmitigated risk?</div>
+          <div class="node-detail">The critical question: does the Zalando EUR settlement create a natural hedge against the IC sale exposure (PLN in, EUR out) — or does it represent a separate, unmitigated risk that compounds the portfolio exposure? This must be investigated.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div class="connector"><svg width="2" height="16"><line x1="1" y1="0" x2="1" y2="16" stroke="var(--text-dim)" stroke-width="1"/></svg></div>
+
+        <div class="node" onclick="toggle(this)" data-id="b5" style="border-color:rgba(245,158,11,0.3)">
+          <div class="node-label"><span class="dot"></span>Status</div>
+          <div class="node-title">Requires investigation</div>
+          <div class="node-detail">Insufficient data exists today to determine whether the Zalando flow is a natural offset. This requires cross-functional investigation with FinSys EMEA to map the full cash flow chain and quantify net exposure.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div class="connector-cross"><div class="cross-label">feeds into column 3 next steps</div></div>
+
+      </div>
+    </div>
+
+    <!-- COLUMN 3: Accounting & Next Steps -->
+    <div class="column col-green">
+      <div class="column-header">
+        <div class="col-num">03</div>
+        <h2>Accounting treatment & strategy</h2>
+      </div>
+      <div class="column-body">
+
+        <div class="connector-cross"><div class="cross-label">driven by margin impact (column 1)</div></div>
+
+        <div class="node" onclick="toggle(this)" data-id="c1" style="margin-top:12px">
+          <div class="node-label"><span class="dot"></span>Current state</div>
+          <div class="node-title">Hedge impacts posted to revenue</div>
+          <div class="node-detail">Today, the FX hedge gains/losses from the derivative portfolio are posted to the revenue line on the P&L. This treatment has been consistent historically but may not accurately reflect the economic driver of the exposure.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div class="connector"><svg width="2" height="16"><line x1="1" y1="0" x2="1" y2="16" stroke="var(--text-dim)" stroke-width="1"/></svg></div>
+
+        <div class="node" onclick="toggle(this)" data-id="c2">
+          <div class="node-label"><span class="dot"></span>Proposed shift</div>
+          <div class="node-title">Move hedge impacts to COGS (driven by EUR cost basis)</div>
+          <div class="node-detail">The rationale: if the underlying exposure is driven by the EUR cost of goods flowing through intercompany, the hedge impact should logically sit in COGS, not revenue. This would better align hedge accounting with the economic substance of the exposure.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div class="connector"><svg width="2" height="16"><line x1="1" y1="0" x2="1" y2="16" stroke="var(--text-dim)" stroke-width="1"/></svg></div>
+
+        <div class="node decision" onclick="toggle(this)" data-id="c3">
+          <div class="node-label"><span class="dot"></span>Decision</div>
+          <div class="node-title">CHANGE APPROVED?</div>
+          <div class="node-detail">This accounting treatment change requires senior leadership approval. The decision weighs economic accuracy (COGS alignment) against practical concerns around YoY comparability, audit optics, and stakeholder communication.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+          <div>
+            <div style="font-size:0.65rem;color:var(--text-dim);text-align:center;margin-bottom:6px">No / Advised against</div>
+            <div class="node" onclick="toggle(this)" data-id="c4">
+              <div class="node-label"><span class="dot"></span>Status quo</div>
+              <div class="node-title">Maintain current treatment — prioritize YoY consistency</div>
+              <div class="node-detail">If the change is not approved, the hedge impacts remain in revenue. The primary argument: maintaining YoY consistency avoids confusing stakeholders and eliminates the need to restate prior periods for comparability.</div>
+              <div class="node-expand-hint">Click →</div>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:0.65rem;color:var(--text-dim);text-align:center;margin-bottom:6px">Requires escalation</div>
+            <div class="node" onclick="toggle(this)" data-id="c5">
+              <div class="node-label"><span class="dot"></span>Escalation</div>
+              <div class="node-title">Consult "Andrew" — senior leadership decision</div>
+              <div class="node-detail">If the rationale is compelling but the decision exceeds the team's authority, it escalates to Andrew for senior leadership review. This path requires a clear memo with financial impact quantification.</div>
+              <div class="node-expand-hint">Click →</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="connector"><svg width="2" height="20"><line x1="1" y1="0" x2="1" y2="20" stroke="var(--accent-purple)" stroke-width="1" stroke-dasharray="4 3"/></svg></div>
+
+        <div class="node nextstep" onclick="toggle(this)" data-id="d1">
+          <div class="node-label"><span class="dot"></span>Next step</div>
+          <div class="node-title">Cross-functional investigation with FinSys EMEA</div>
+          <div class="node-detail">Regardless of the accounting treatment decision, the next action is a cross-functional investigation with the Financial Systems team in EMEA. This investigation needs to map the complete transaction chain, identify all conversion points, and quantify the net exposure including the Zalando layer.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+        <div class="connector"><svg width="2" height="16"><line x1="1" y1="0" x2="1" y2="16" stroke="var(--accent-purple)" stroke-width="1" stroke-dasharray="4 3"/></svg></div>
+
+        <div class="node nextstep" onclick="toggle(this)" data-id="d2">
+          <div class="node-label"><span class="dot"></span>Objective</div>
+          <div class="node-title">Gather historical docs & map all FX drivers</div>
+          <div class="node-detail">The objective is to collect historical documentation (IC pricing agreements, hedge designation memos, Zalando settlement terms) and produce a comprehensive map of every FX conversion point in the EUR→PLN→EUR chain. This becomes the foundation for any hedge strategy adjustment.</div>
+          <div class="node-expand-hint">Click to expand →</div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <div class="summary-bar">
+    <div class="summary-stat">
+      <span class="stat-label">Currency pair</span>
+      <span class="stat-value">EUR / PLN</span>
+    </div>
+    <div class="summary-stat">
+      <span class="stat-label">Exposure type</span>
+      <span class="stat-value">Transaction — IC sale + wholesale</span>
+    </div>
+    <div class="summary-stat">
+      <span class="stat-label">Rate driver</span>
+      <span class="stat-value">Plan rate vs. daily rate delta</span>
+    </div>
+    <div class="summary-stat">
+      <span class="stat-label">Status</span>
+      <span class="stat-value" style="color:var(--accent-amber)">Investigation required</span>
+    </div>
+    <div class="summary-stat" style="margin-left:auto">
+      <span class="stat-label">Keyboard</span>
+      <span class="stat-value" style="font-size:0.75rem;color:var(--text-muted)">E = expand all &middot; C = collapse all</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggle(el) {
+  el.classList.toggle('expanded');
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'e' || e.key === 'E') {
+    document.querySelectorAll('.node').forEach(n => n.classList.add('expanded'));
+  }
+  if (e.key === 'c' || e.key === 'C') {
+    document.querySelectorAll('.node').forEach(n => n.classList.remove('expanded'));
+  }
+});
+</script>
+
+</body>
+</html>
